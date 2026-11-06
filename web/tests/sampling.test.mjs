@@ -75,10 +75,66 @@ test("default classroom example finds legal paths for all three planners", () =>
   for (const algorithm of ["rrt", "rrtstar", "prm"]) {
     const p = new SamplingPlanner(preset("parking"), algorithm).finish();
     assert.equal(p.status, "found");
-    assert.equal(p.iterations, 800);
+    if (algorithm === "rrt") assert.ok(p.iterations < 800, "RRT stops at its first path");
+    else assert.equal(p.iterations, 800, "RRT* and PRM retain their configured trial budget");
     verify(p);
     assert.equal(p.step(), false);
   }
+});
+test("RRT freezes its first valid path while RRT* and PRM continue independently", () => {
+  const map = preset("parking"),
+    rrt = new SamplingPlanner(map, "rrt"),
+    star = new SamplingPlanner(map, "rrtstar"),
+    prm = new SamplingPlanner(map, "prm");
+  while (!rrt.path.length) {
+    assert.equal(rrt.step(), true);
+    star.step();
+    prm.step();
+  }
+  assert.equal(rrt.iterations, 209, "Regression fixture: first goal connection, not the 800-trial cutoff");
+  assert.equal(rrt.status, "found");
+  assert.equal(rrt.done, true);
+  assert.equal(star.done, false);
+  assert.equal(prm.done, false);
+  const snapshot = () =>
+    structuredClone({
+      iterations: rrt.iterations,
+      nodes: rrt.nodes,
+      path: rrt.path,
+      cost: rrt.bestCost,
+      rng: rrt.rng,
+      lastSample: rrt.lastSample,
+      status: rrt.status,
+    });
+  const frozen = snapshot();
+  while (!star.done || !prm.done) {
+    assert.equal(rrt.step(), false);
+    star.step();
+    prm.step();
+  }
+  rrt.finish();
+  assert.deepEqual(snapshot(), frozen, "A completed RRT must not add nodes, change the path, advance its RNG, or consume more trials");
+  assert.equal(star.iterations, 800);
+  assert.equal(prm.iterations, 800);
+  assert.ok(star.nodes.length > rrt.nodes.length);
+  verify(rrt);
+  verify(star);
+  verify(prm);
+});
+test("RRT accepts an immediate valid connection but never stops for a blocked goal segment", () => {
+  const direct = new SamplingPlanner({ rows: 1, cols: 2, walls: [0, 0], start: 0, goal: 1 }, "rrt");
+  assert.equal(direct.done, true);
+  assert.equal(direct.status, "found");
+  assert.equal(direct.iterations, 0);
+  assert.equal(direct.bestCost, 1);
+  assert.equal(direct.step(), false);
+  verify(direct);
+  const blocked = new SamplingPlanner({ rows: 3, cols: 3, walls: [0, 1, 0, 0, 0, 0, 0, 0, 0], start: 0, goal: 2 }, "rrt", { step: 3 });
+  assert.equal(blocked.done, false);
+  assert.equal(blocked.status, "ready");
+  assert.deepEqual(blocked.path, []);
+  assert.equal(blocked.step(), true);
+  verify(blocked);
 });
 test("seed repeats exactly; step and finish agree without mutating the source map", () => {
   for (const algorithm of ["rrt", "rrtstar", "prm"]) {

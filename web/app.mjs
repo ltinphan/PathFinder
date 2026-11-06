@@ -3,7 +3,7 @@
  * Java source is unchanged; see README.md for mathematical and collision-rule changes.
  */
 import { Search, preset } from "./search.mjs";
-import { SamplingPlanner } from "./sampling.mjs";
+import { SamplingPlanner } from "./sampling.mjs?v=rrt-stop-20261106";
 const $ = (id) => document.getElementById(id);
 const gridNames = ["astar", "dijkstra"],
   sampleNames = ["rrt", "rrtstar", "prm"];
@@ -442,8 +442,13 @@ function renderSampling() {
     $(`${name}-current`).textContent = `${s.iterations}/${s.budget} lần thử · ${message}${
       s.done && !s.path.length ? " Hết ngân sách, chưa tìm được đường." : ""
     }`;
+    if (name === "rrt") $("rrt-phase").textContent = s.done ? (s.path.length ? "ĐÃ CÓ ĐƯỜNG · DỪNG" : "HẾT SỐ LẦN THỬ") : "MỞ RỘNG CÂY";
   });
   const done = searches.every((s) => s.done);
+  const rrtStop =
+    searches[0].iterations === 0
+      ? "RRT đã nối trực tiếp S với G và dừng, không cần lấy mẫu."
+      : `RRT đã tìm được đường đầu tiên và dừng ở lần thử ${searches[0].iterations}.`;
   $("step").disabled = done;
   $("finish").disabled = done;
   if (done) {
@@ -451,15 +456,20 @@ function renderSampling() {
     const labels = ["RRT", "RRT*", "PRM"];
     $("result").textContent =
       searches.map((s, k) => `${labels[k]}: ${s.path.length ? s.bestCost.toFixed(2) + " ô" : "chưa tìm được đường"}`).join(" · ") +
-      ". Cùng ngân sách hữu hạn; chưa tìm được đường không chứng minh rằng không có đường.";
-    say("Đã chạy hết ngân sách. Có thể tăng số lần thử hoặc đổi seed rồi chạy lại.");
+      (searches[0].path.length
+        ? `. ${rrtStop} RRT* và PRM đã chạy hết giới hạn ${searches[0].budget} lần thử.`
+        : ". Đã hết số lần thử; chưa tìm được đường không chứng minh rằng không có đường.");
+    say("Đã hoàn tất. Có thể đổi tham số rồi chạy lại.");
   } else {
     const found = searches.slice(0, 2).filter((s) => s.path.length).length;
-    $("result").textContent = searches.every((s) => s.iterations === 0)
-      ? "Nhấn Tiến một bước để quan sát từng mẫu, hoặc Chạy so sánh để xem cây và mạng phát triển."
-      : found
-        ? `Đã có đường ở ${found} cây. RRT* vẫn tiếp tục thử nối lại để giảm độ dài; PRM đang dựng mạng và sẽ truy vấn ở cuối.`
-        : "Đang xây cây và mạng. Mẫu hoặc đoạn nối không hợp lệ bị loại nhưng vẫn tính là một lần thử.";
+    $("result").textContent =
+      searches[0].done && searches[0].path.length
+        ? `${rrtStop} Cây RRT giữ nguyên; RRT* tiếp tục cải thiện đường và PRM tiếp tục dựng mạng.`
+        : searches.every((s) => s.iterations === 0)
+          ? "Nhấn Tiến một bước để quan sát từng mẫu, hoặc Chạy so sánh để xem cây và mạng phát triển."
+          : found
+            ? `Đã có đường ở ${found} cây. RRT* vẫn tiếp tục thử nối lại để giảm độ dài; PRM đang dựng mạng và sẽ truy vấn ở cuối.`
+            : "Đang xây cây và mạng. Mẫu hoặc đoạn nối không hợp lệ bị loại nhưng vẫn tính là một lần thử.";
   }
 }
 function chooseMode(sample) {

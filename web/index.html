@@ -8,7 +8,7 @@
     <meta name="color-scheme" content="light dark" />
     <title>Mô phỏng thuật toán · Lập lộ trình di chuyển | tinrobotics</title>
     <link rel="stylesheet" href="./style.css?v=0cc544d" />
-    <script type="module" src="./app.mjs"></script>
+    <script type="module" src="./app.mjs?v=rrt-stop-20261106"></script>
   </head>
   <body>
     <a class="skip" href="#simulation">Đến bảng mô phỏng</a>
@@ -95,8 +95,8 @@
             </select>
           </div>
           <p>
-            Cùng bản đồ và ngân sách. Seed giúp tái lập từng thuật toán; RRT và RRT* có 10% mẫu hướng về đích. Độ dài tính theo cạnh ô, không phải chi
-            phí 10/14 của chế độ lưới.
+            Cùng bản đồ và giới hạn số lần thử. RRT dừng khi tìm được đường đầu tiên; RRT* và PRM chạy đến giới hạn đã chọn. Seed giúp tái lập từng
+            thuật toán; RRT và RRT* có 10% mẫu hướng về đích. Độ dài tính theo cạnh ô, khác với chi phí 10/14 của chế độ lưới.
           </p>
         </div>
         <div class="editbar">
@@ -201,7 +201,7 @@
           <article class="board" id="rrt-board">
             <header>
               <div>
-                <span class="algo-tag">MỞ RỘNG CÂY</span>
+                <span class="algo-tag" id="rrt-phase">MỞ RỘNG CÂY</span>
                 <h2>RRT</h2>
               </div>
             </header>
@@ -395,7 +395,10 @@
               Mỗi lần thử chọn một điểm, tìm nút gần nhất rồi tiến về phía mẫu trong giới hạn bước mở rộng. Chỉ thêm đoạn nối nếu toàn bộ đoạn không
               chạm vật cản. Khi nối được tới G, đường được lần ngược qua các nút cha.
             </p>
-            <p>Demo tiếp tục lấy mẫu đến hết ngân sách để so sánh. RRT giữ cách nối cũ nên có thể tìm được một đường vòng khá dài.</p>
+            <p>
+              RRT dừng ngay khi có đường hợp lệ tới G. Cây và đường đầu tiên được giữ nguyên trong lúc RRT* và PRM còn chạy. Đường RRT có thể vòng khá
+              xa vì thuật toán này chưa tối ưu lại các nhánh.
+            </p>
           </article>
           <article>
             <h3>RRT*: tìm cha tốt hơn và nối lại nhánh</h3>
@@ -424,6 +427,10 @@
           <p>
             Mỗi bước là một lần thử lấy mẫu; mẫu hoặc cạnh bị loại vẫn tính vào ngân sách. Số nút RRT/RRT* gồm S; số nút PRM gồm S và G. Độ dài là
             tổng khoảng cách Euclid của các đoạn nối, theo cạnh ô lưới. Lấy mẫu không bị giới hạn vào tâm ô hay 4/8 hướng.
+          </p>
+          <p>
+            RRT dừng ở đường đầu tiên, nên số lần thử thực tế có thể thấp hơn giới hạn đã chọn. Mỗi lần bấm Tiến một bước chỉ cập nhật những thuật
+            toán còn chạy. RRT* tiếp tục nối lại để cải thiện đường; PRM dựng mạng rồi mới truy vấn đường ở cuối.
           </p>
           <p>
             RRT và RRT* dùng 10% mẫu đích, còn PRM lấy mẫu đều. Seed giữ nguyên cho từng thuật toán khi chạy lại. Với RRT*, bán kính lân cận là

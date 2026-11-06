@@ -84,14 +84,22 @@ export class SamplingPlanner {
       this.nodes.push({ ...this.goal, parent: -1, cost: Infinity });
       this.adjacency.push([]);
       if (distance(this.start, this.goal) <= radius && segmentFree(this.start, this.goal, this.map)) this.connect(0, 1);
-    } else this.updatePath();
+    } else {
+      this.updatePath();
+      // A nearby goal may already have a valid direct connection from S.
+      if (this.algorithm === "rrt" && this.path.length) {
+        this.status = "found";
+        this.message = "Đã nối trực tiếp S với G; cây RRT đã dừng, không cần lấy mẫu.";
+      }
+    }
   }
   random() {
     this.rng = (Math.imul(1664525, this.rng) + 1013904223) >>> 0;
     return this.rng / 4294967296;
   }
   get done() {
-    return this.iterations >= this.budget;
+    // RRT solves a feasibility query; RRT* keeps optimizing until its budget.
+    return (this.algorithm === "rrt" && this.path.length > 0) || this.iterations >= this.budget;
   }
   connect(a, b) {
     const cost = distance(this.nodes[a], this.nodes[b]);
@@ -116,6 +124,7 @@ export class SamplingPlanner {
     if (this.done) {
       if (this.algorithm === "prm") this.queryRoadmap();
       this.status = this.path.length ? "found" : "unresolved";
+      if (this.algorithm === "rrt" && this.path.length) this.message = "Đã tìm được đường đầu tiên; cây RRT đã dừng.";
     }
     return true;
   }
