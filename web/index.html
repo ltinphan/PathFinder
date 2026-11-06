@@ -195,9 +195,16 @@
         <div class="reading-card">
           <h3>Vì sao A* vẫn tìm được đường tối ưu?</h3>
           <p>
-            Với 4 hướng, A* dùng khoảng cách Manhattan: <var>h</var> = 10(Δ<var>x</var> + Δ<var>y</var>). Với 8 hướng, A* dùng khoảng cách octile:
-            <var>h</var> = 14 min(Δ<var>x</var>, Δ<var>y</var>) + 10|Δ<var>x</var> − Δ<var>y</var>|.
+            <var>g</var>(<var>n</var>) là chi phí tốt nhất hiện biết từ S đến ô <var>n</var>; <var>h</var>(<var>n</var>) là ước lượng chi phí còn lại
+            đến G. A* ưu tiên ô có tổng <var>f</var> nhỏ nhất, còn Dijkstra chỉ dùng <var>g</var> để xếp thứ tự.
           </p>
+          <p>
+            Với 4 hướng, A* dùng khoảng cách Manhattan: <var>h</var> = 10(Δ<var>x</var>
+            + Δ<var>y</var>). Với 8 hướng, A* dùng khoảng cách octile:
+            <var>h</var> = 14 min(Δ<var>x</var>, Δ<var>y</var>) + 10|Δ<var>x</var>
+            − Δ<var>y</var>|.
+          </p>
+          <p>Ở đây, Δ<var>x</var> và Δ<var>y</var> là độ chênh lệch tuyệt đối về cột và hàng giữa ô đang xét với đích.</p>
           <p>
             Hai ước lượng này không vượt chi phí ngắn nhất còn lại và nhất quán với chi phí cạnh đang dùng. A* và Dijkstra vì thế phải tìm được cùng
             chi phí tối ưu nếu có đường, dù có thể chọn những đường khác nhau.
@@ -232,8 +239,11 @@
       </aside>
       <footer>
         <p>
-          Phát triển từ <a href="https://github.com/kevinwang1975/PathFinder">PathFinder của Kevin Wang</a> ·
-          <a href="https://github.com/ltinphan/PathFinder/tree/master/web">Mã nguồn bản web</a> · <a href="./LICENSE.txt">Apache-2.0</a>
+          Phát triển từ
+          <a href="https://github.com/kevinwang1975/PathFinder">PathFinder của Kevin Wang</a>
+          ·
+          <a href="https://github.com/ltinphan/PathFinder/tree/master/web">Mã nguồn bản web</a>
+          · <a href="./LICENSE.txt">Apache-2.0</a>
         </p>
         <p>
           Bản web bổ sung giao diện tiếng Việt, chạy từng bước, heuristic phù hợp với lưới và quy tắc chéo chặt hơn. Mã Java gốc được giữ trong fork.
