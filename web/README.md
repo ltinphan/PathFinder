@@ -6,7 +6,7 @@ Live simulator: <https://tinrobotics.com/teaching/lap-lo-trinh-di-chuyen/mo-phon
 
 ## Run locally
 
-From this repository: `python3 -m http.server 8768 --directory web`, then open <http://localhost:8768/>. ES modules require HTTP rather than opening `index.html` as a local file. No package installation, backend, telemetry, or external runtime library is needed.
+From this repository: `python3 -m http.server 8768 --directory web`, then open <http://localhost:8768/>. ES modules require HTTP rather than opening `index.html` as a local file. No package installation, backend, or external runtime library is needed. The standalone app does not send telemetry; the host website may add its own existing analytics.
 
 Verify all five planners: `node --test web/tests/*.test.mjs` (Node 18+).
 
@@ -52,3 +52,5 @@ References: [LaValle, Chapter 5](https://lavalle.pl/planning/ch5.pdf); [Karaman 
 Original PathFinder author: **Kevin Wang** (`kevinwang1975`). Upstream repository: <https://github.com/kevinwang1975/PathFinder>. Original project: Apache License 2.0.
 
 Browser adaptation and explanatory material: **Luong Tin Phan**, Apache License 2.0. The full license is provided in `../LICENSE` and `LICENSE.txt`. The original Java files and attribution notices are retained. The new browser files identify the adaptation and behavioral changes above.
+
+The stylesheet URL carries a version query to avoid stale CDN responses. Bump it when changing CSS, and verify the deployed (Jekyll-minified) CSS rather than expecting the pretty-printed source bytes.
