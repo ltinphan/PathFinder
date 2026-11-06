@@ -12,3 +12,9 @@ path searching, and the two resulted paths side by side for comparison.
 
 # Build jar file: mvn package
 # Run jar file: java -jar target/pathfinder-1.0.jar
+
+# Vietnamese browser teaching edition
+The original Java project above is preserved. A browser adaptation of A* and
+Dijkstra is available in web/. See web/README.md for running, testing, license
+attribution, and the heuristic/corner-check differences from the Java version.
+Live: https://tinrobotics.com/teaching/lap-lo-trinh-di-chuyen/mo-phong-thuat-toan/

@@ -1,0 +1,245 @@
+<!doctype html>
+<!-- Apache-2.0. Browser teaching adaptation of Kevin Wang's PathFinder by Luong Tin Phan. -->
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Vẽ bản đồ và so sánh từng bước A* với Dijkstra trong học phần Lập lộ trình di chuyển." />
+    <meta name="color-scheme" content="light dark" />
+    <title>Mô phỏng thuật toán · Lập lộ trình di chuyển | tinrobotics</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.mjs"></script>
+  </head>
+  <body>
+    <a class="skip" href="#simulation">Đến bảng mô phỏng</a>
+    <header class="sitebar">
+      <a class="brand" href="/">tinrobotics<span> / teaching</span></a
+      ><a href="/teaching/">Các học phần ↗</a>
+    </header>
+    <main>
+      <nav class="breadcrumb" aria-label="Đường dẫn">
+        <a href="/teaching/">Teaching</a><span>/</span><a href="/teaching/lap-lo-trinh-di-chuyen/">Lập lộ trình di chuyển</a><span>/</span
+        ><span>Mô phỏng thuật toán</span>
+      </nav>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">LẬP LỘ TRÌNH DI CHUYỂN · ĐẠI HỌC</p>
+          <h1>Hai cách tìm đường.<br />Cùng một bản đồ.</h1>
+          <p class="lead">
+            Dijkstra mở rộng từ điểm xuất phát. A* dùng thêm ước lượng đến đích để chọn hướng tìm kiếm. Hãy đặt vật cản, chạy từng bước và xem sự khác
+            biệt.
+          </p>
+        </div>
+        <div class="intro-note">
+          <span class="note-number">01 / TÌM KIẾM TRÊN LƯỚI</span>
+          <p>Đường nào ngắn hơn?<br />Thuật toán nào xét ít ô hơn?</p>
+          <a href="#reading">Cách đọc kết quả ↓</a>
+        </div>
+      </section>
+      <section id="simulation" aria-label="So sánh A* và Dijkstra">
+        <div class="toolbar">
+          <div class="field">
+            <label for="scenario">Bản đồ</label
+            ><select id="scenario">
+              <option value="parking">Lối đi giữa các dãy vật cản</option>
+              <option value="empty">Bản đồ trống</option>
+              <option value="narrow">Một cửa hẹp</option>
+              <option value="blocked">Vách ngăn kín</option>
+              <option value="random">Vật cản ngẫu nhiên</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="movement">Cách di chuyển</label
+            ><select id="movement">
+              <option value="8">8 hướng · ngang/dọc và chéo</option>
+              <option value="4">4 hướng · chỉ ngang/dọc</option>
+            </select>
+          </div>
+          <div class="field speed">
+            <label for="speed">Tốc độ <output id="speed-value">40</output> bước/s</label
+            ><input id="speed" type="range" min="1" max="120" value="40" />
+          </div>
+          <button id="new-map" class="quiet">Tạo lại bản đồ</button>
+        </div>
+        <div class="editbar">
+          <span class="tool-label">Chỉnh bản đồ</span>
+          <div class="tools" role="group" aria-label="Công cụ chỉnh bản đồ">
+            <button data-tool="wall" aria-pressed="true">▧ Vật cản</button><button data-tool="erase" aria-pressed="false">⌫ Xóa ô</button
+            ><button data-tool="start" aria-pressed="false">S Điểm đầu</button><button data-tool="goal" aria-pressed="false">G Điểm đích</button>
+          </div>
+          <button class="quiet" id="clear-walls">Xóa hết vật cản</button>
+        </div>
+        <p class="hint" id="edit-help">
+          Nhấn hoặc kéo trên một bản đồ; bản đồ bên cạnh sẽ đổi theo. Dùng phím mũi tên để chọn ô, Enter để đặt. Mỗi lần sửa sẽ bắt đầu lại phép so
+          sánh.
+        </p>
+        <div class="controls">
+          <button id="run" class="primary">▶ Chạy so sánh</button><button id="step">Tiến một bước</button><button id="finish">Xem kết quả</button
+          ><button id="reset" class="quiet">Chạy lại từ đầu</button
+          ><span id="status" role="status" aria-live="polite">Sẵn sàng. Hai thuật toán dùng cùng một bản đồ.</span>
+        </div>
+        <div class="boards">
+          <article class="board" id="astar-board">
+            <header>
+              <div>
+                <span class="algo-tag">CÓ HEURISTIC</span>
+                <h2>A*</h2>
+              </div>
+              <p><var>f</var>(<var>n</var>) = <var>g</var>(<var>n</var>) + <var>h</var>(<var>n</var>)</p>
+            </header>
+            <canvas
+              id="astar"
+              width="792"
+              height="504"
+              tabindex="0"
+              aria-label="Bản đồ A*. Dùng mũi tên và Enter để chỉnh ô."
+              aria-describedby="edit-help astar-metrics"
+              >Bản đồ A*: kết quả được ghi ở bên dưới.</canvas
+            >
+            <dl class="metrics" id="astar-metrics">
+              <div>
+                <dt>Ô đã xét</dt>
+                <dd data-metric="expanded">0</dd>
+              </div>
+              <div>
+                <dt>Đang chờ</dt>
+                <dd data-metric="open">1</dd>
+              </div>
+              <div>
+                <dt>Chi phí đường</dt>
+                <dd data-metric="cost">—</dd>
+              </div>
+              <div>
+                <dt>Số cạnh</dt>
+                <dd data-metric="edges">—</dd>
+              </div>
+            </dl>
+            <p class="current" id="astar-current">Chưa lấy ô nào ra khỏi hàng đợi.</p>
+          </article>
+          <article class="board" id="dijkstra-board">
+            <header>
+              <div>
+                <span class="algo-tag">KHÔNG HEURISTIC</span>
+                <h2>Dijkstra</h2>
+              </div>
+              <p><var>f</var>(<var>n</var>) = <var>g</var>(<var>n</var>)</p>
+            </header>
+            <canvas
+              id="dijkstra"
+              width="792"
+              height="504"
+              tabindex="0"
+              aria-label="Bản đồ Dijkstra. Dùng mũi tên và Enter để chỉnh ô."
+              aria-describedby="edit-help dijkstra-metrics"
+              >Bản đồ Dijkstra: kết quả được ghi ở bên dưới.</canvas
+            >
+            <dl class="metrics" id="dijkstra-metrics">
+              <div>
+                <dt>Ô đã xét</dt>
+                <dd data-metric="expanded">0</dd>
+              </div>
+              <div>
+                <dt>Đang chờ</dt>
+                <dd data-metric="open">1</dd>
+              </div>
+              <div>
+                <dt>Chi phí đường</dt>
+                <dd data-metric="cost">—</dd>
+              </div>
+              <div>
+                <dt>Số cạnh</dt>
+                <dd data-metric="edges">—</dd>
+              </div>
+            </dl>
+            <p class="current" id="dijkstra-current">Chưa lấy ô nào ra khỏi hàng đợi.</p>
+          </article>
+        </div>
+        <div class="legend" aria-label="Chú thích màu">
+          <span><i class="wall"></i>Vật cản</span><span><i class="closed"></i>Đã xét</span><span><i class="open"></i>Đang chờ</span
+          ><span><i class="current-cell"></i>Vừa chọn</span><span><i class="path"></i>Đường tìm được</span
+          ><span><b class="start-key">S</b> Điểm đầu</span><span><b class="goal-key">G</b> Điểm đích</span>
+        </div>
+        <p class="result" id="result">Thử đoán trước: A* có cần xét hết vùng quanh điểm đầu không?</p>
+        <details class="queue">
+          <summary>Xem hàng đợi và chi phí từng ô</summary>
+          <p id="inspector">Chọn một ô trên bản đồ bằng phím mũi tên để đọc chi phí.</p>
+          <div class="queue-columns">
+            <div>
+              <h3>A* · 5 ô có ưu tiên cao nhất</h3>
+              <ol id="astar-queue"></ol>
+            </div>
+            <div>
+              <h3>Dijkstra · 5 ô có ưu tiên cao nhất</h3>
+              <ol id="dijkstra-queue"></ol>
+            </div>
+          </div>
+          <p>
+            Các ô có cùng mức ưu tiên được xử lý theo thứ tự đưa vào hàng đợi. Danh sách ở đây sắp thêm theo tọa độ để dễ đọc; đường tối ưu có thể
+            không duy nhất.
+          </p>
+        </details>
+      </section>
+      <section class="reading" id="reading">
+        <div>
+          <p class="eyebrow">ĐỌC KẾT QUẢ</p>
+          <h2>Ít ô hơn chưa có nghĩa<br />là đường ngắn hơn.</h2>
+          <p>
+            Một bước ngang hoặc dọc có chi phí 10; một bước chéo có chi phí 14. Chi phí đường là tổng các bước, nên hai đường có số cạnh khác nhau vẫn
+            có thể có cùng chi phí. Đây là đơn vị quy ước của lưới, chưa quy đổi ra mét hay năng lượng.
+          </p>
+          <p>
+            “Ô đã xét” là số ô được lấy ra khỏi hàng đợi để xử lý, kể cả ô đích. “Đang chờ” là số ô đã được tìm thấy nhưng chưa xử lý. Mỗi lần bấm
+            “Tiến một bước”, mỗi thuật toán còn chạy sẽ lấy ra một ô.
+          </p>
+        </div>
+        <div class="reading-card">
+          <h3>Vì sao A* vẫn tìm được đường tối ưu?</h3>
+          <p>
+            Với 4 hướng, A* dùng khoảng cách Manhattan: <var>h</var> = 10(Δ<var>x</var> + Δ<var>y</var>). Với 8 hướng, A* dùng khoảng cách octile:
+            <var>h</var> = 14 min(Δ<var>x</var>, Δ<var>y</var>) + 10|Δ<var>x</var> − Δ<var>y</var>|.
+          </p>
+          <p>
+            Hai ước lượng này không vượt chi phí ngắn nhất còn lại và nhất quán với chi phí cạnh đang dùng. A* và Dijkstra vì thế phải tìm được cùng
+            chi phí tối ưu nếu có đường, dù có thể chọn những đường khác nhau.
+          </p>
+          <p>Đường chéo chỉ được phép khi cả hai ô kề cạnh đều trống. Quy tắc này tránh đi xuyên qua góc vật cản.</p>
+        </div>
+      </section>
+      <section class="practice">
+        <h2>Ba thử nghiệm trên lớp</h2>
+        <ol>
+          <li>
+            <strong>Đường trống.</strong> Chạy trên bản đồ trống, ghi chi phí và số ô đã xét của mỗi thuật toán. Vì sao hai kết quả chi phí bằng nhau?
+          </li>
+          <li>
+            <strong>Đích ở sau bức vách.</strong> Chọn “Một cửa hẹp”, rồi tự chuyển điểm đích. Khi phải đi vòng, ước lượng đến đích còn giúp được bao
+            nhiêu?
+          </li>
+          <li>
+            <strong>Không có đường.</strong> Chọn “Vách ngăn kín”. Trước khi chạy, dự đoán thuật toán nào sẽ dừng trước. Hãy kiểm tra xem cả hai có
+            phải xét toàn bộ vùng đi tới được từ S không.
+          </li>
+        </ol>
+        <p>
+          Ghi lại bản đồ, cách di chuyển, chi phí và số ô đã xét. Hãy so sánh trên cùng cấu hình; tốc độ hoạt ảnh chỉ giúp theo dõi, không phải phép
+          đo thời gian tính toán.
+        </p>
+      </section>
+      <aside class="model-note">
+        <strong>Liên hệ với ô tô tự hành.</strong> Ví dụ này xem phương tiện như một điểm trên lưới, chưa xét kích thước thân xe, hướng xe, bán kính
+        quay, vận tốc hay vật cản chuyển động. Đường tìm được giúp học nguyên lý tìm kiếm; để xe thực hiện được, còn cần mô hình xe và kiểm tra va
+        chạm phù hợp.
+      </aside>
+      <footer>
+        <p>
+          Phát triển từ <a href="https://github.com/kevinwang1975/PathFinder">PathFinder của Kevin Wang</a> ·
+          <a href="https://github.com/ltinphan/PathFinder/tree/master/web">Mã nguồn bản web</a> · <a href="./LICENSE.txt">Apache-2.0</a>
+        </p>
+        <p>
+          Bản web bổ sung giao diện tiếng Việt, chạy từng bước, heuristic phù hợp với lưới và quy tắc chéo chặt hơn. Mã Java gốc được giữ trong fork.
+        </p>
+        <a href="/teaching/lap-lo-trinh-di-chuyen/">← Về học phần Lập lộ trình di chuyển</a>
+      </footer>
+    </main>
+  </body>
+</html>
