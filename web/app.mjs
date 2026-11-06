@@ -3,8 +3,12 @@
  * Java source is unchanged; see README.md for mathematical and collision-rule changes.
  */
 import { Search, preset } from "./search.mjs";
+import { SamplingPlanner } from "./sampling.mjs";
 const $ = (id) => document.getElementById(id);
-const names = ["astar", "dijkstra"];
+const gridNames = ["astar", "dijkstra"],
+  sampleNames = ["rrt", "rrtstar", "prm"];
+let names = gridNames,
+  samplingMode = false;
 const colors = { wall: "#344054", closed: "#c8e4f3", open: "#ffe5a3", current: "#ffb26b", path: "#166fe5" };
 let map = preset(),
   searches,
@@ -29,10 +33,16 @@ function stop() {
   $("run").textContent = "▶ Chạy so sánh";
   $("run").setAttribute("aria-pressed", "false");
 }
-function reset(message = "Sẵn sàng. Hai thuật toán dùng cùng một bản đồ.") {
+function reset(message = "Sẵn sàng. Các thuật toán dùng cùng một bản đồ.") {
   stop();
-  searches = names.map((name) => new Search(map, name));
-  $("result").textContent = "Thử đoán trước: A* có cần xét hết vùng quanh điểm đầu không?";
+  const rawSeed = Number($("sample-seed").value);
+  const seed = Math.max(0, Math.min(4294967295, Number.isFinite(rawSeed) ? Math.floor(rawSeed) : 42));
+  $("sample-seed").value = seed;
+  const options = { seed, budget: Number($("sample-budget").value), step: Number($("sample-step").value), radius: Number($("sample-radius").value) };
+  searches = names.map((name) => (samplingMode ? new SamplingPlanner(map, name, options) : new Search(map, name)));
+  $("result").textContent = samplingMode
+    ? "Hãy quan sát cây RRT, những lần nối lại của RRT* và mạng PRM. PRM sẽ truy vấn đường khi hết ngân sách mẫu."
+    : "Thử đoán trước: A* có cần xét hết vùng quanh điểm đầu không?";
   say(message);
   render();
 }
@@ -117,6 +127,10 @@ function draw(canvas, search) {
   }
 }
 function render() {
+  if (samplingMode) {
+    renderSampling();
+    return;
+  }
   searches.forEach((s, k) => {
     const name = names[k];
     draw($(name), s);
@@ -199,13 +213,17 @@ $("run").addEventListener("click", () => {
   credit = 0;
   $("run").textContent = "Ⅱ Tạm dừng";
   $("run").setAttribute("aria-pressed", "true");
-  say("Đang chạy cùng tốc độ lấy ô cho cả hai thuật toán.");
+  say(
+    samplingMode
+      ? "Đang lấy mẫu. RRT* tiếp tục cải thiện đường; PRM truy vấn sau khi dựng mạng."
+      : "Đang chạy cùng tốc độ lấy ô cho cả hai thuật toán."
+  );
   frame = requestAnimationFrame(tick);
 });
 $("step").addEventListener("click", () => {
   stop();
   searches.forEach((s) => s.step());
-  say("Mỗi thuật toán còn chạy vừa xử lý thêm một ô.");
+  say(samplingMode ? "Mỗi thuật toán vừa thử thêm một mẫu." : "Mỗi thuật toán còn chạy vừa xử lý thêm một ô.");
   render();
 });
 $("finish").addEventListener("click", () => {
@@ -222,7 +240,7 @@ function newMap() {
   map = preset($("scenario").value, 21, 33, randomSeed++);
   map.diagonal = diagonal;
   cursor = map.start;
-  reset("Đã tạo bản đồ. Hai thuật toán sẽ dùng cùng cấu hình.");
+  reset("Đã tạo bản đồ. Các thuật toán sẽ dùng cùng bản đồ này.");
 }
 $("scenario").addEventListener("change", newMap);
 $("new-map").addEventListener("click", newMap);
@@ -255,7 +273,7 @@ function paint(id) {
   }
   reset(`Đã sửa ô ${point(id)}. Kết quả cũ đã được xóa để chạy lại trên bản đồ mới.`);
 }
-function location(event, canvas) {
+function cellAt(event, canvas) {
   const b = canvas.getBoundingClientRect();
   return (
     Math.max(0, Math.min(map.rows - 1, Math.floor(((event.clientY - b.top) / b.height) * map.rows))) * map.cols +
@@ -286,7 +304,7 @@ function stroke(from, to) {
     }
   }
 }
-names.forEach((name) => {
+[...gridNames, ...sampleNames].forEach((name) => {
   const canvas = $(name);
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -294,12 +312,12 @@ names.forEach((name) => {
     canvas.focus();
     dragging = true;
     canvas.setPointerCapture(e.pointerId);
-    previous = location(e, canvas);
+    previous = cellAt(e, canvas);
     paint(previous);
   });
   canvas.addEventListener("pointermove", (e) => {
     if (!dragging) return;
-    const id = location(e, canvas);
+    const id = cellAt(e, canvas);
     if (id !== previous) {
       if (tool === "wall" || tool === "erase") stroke(previous, id);
       else paint(id);
@@ -323,12 +341,150 @@ names.forEach((name) => {
       e.preventDefault();
       const [dr, dc] = moves[e.key];
       cursor = Math.max(0, Math.min(map.rows - 1, r + dr)) * map.cols + Math.max(0, Math.min(map.cols - 1, c + dc));
+      say(`Đang chọn ô ${point(cursor)}. Nhấn Enter để dùng công cụ hiện tại.`);
       render();
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       paint(cursor);
     }
   });
+});
+function drawSampling(canvas, planner) {
+  // Reuse the obstacle/grid/endpoint layer, then overlay continuous geometry.
+  draw(canvas, { current: -1, closed: [], open: new Set(), path: [] });
+  const ctx = canvas.getContext("2d"),
+    w = canvas.width / map.cols,
+    h = canvas.height / map.rows;
+  const line = (a, b) => {
+    ctx.moveTo(a.x * w, a.y * h);
+    ctx.lineTo(b.x * w, b.y * h);
+  };
+  ctx.strokeStyle = planner.algorithm === "prm" ? "rgba(53,112,127,.18)" : "rgba(35,128,116,.55)";
+  ctx.lineWidth = Math.max(0.65, w * 0.045);
+  ctx.beginPath();
+  if (planner.algorithm === "prm") for (const [a, b] of planner.edges) line(planner.nodes[a], planner.nodes[b]);
+  else
+    planner.nodes.forEach((p) => {
+      if (p.parent >= 0) line(p, planner.nodes[p.parent]);
+    });
+  ctx.stroke();
+  ctx.fillStyle = "#237b70";
+  for (const p of planner.nodes) {
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, Math.max(0.8, w * 0.065), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "#9c36b5";
+  ctx.lineWidth = Math.max(2, w * 0.13);
+  ctx.beginPath();
+  for (const id of planner.lastRewired) line(planner.nodes[id], planner.nodes[planner.nodes[id].parent]);
+  ctx.stroke();
+  if (planner.lastSample) {
+    ctx.strokeStyle = "#d45a12";
+    ctx.lineWidth = Math.max(1.5, w * 0.08);
+    ctx.beginPath();
+    ctx.arc(planner.lastSample.x * w, planner.lastSample.y * h, w * 0.3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (planner.path.length) {
+    ctx.strokeStyle = colors.path;
+    ctx.lineWidth = Math.max(2.5, w * 0.22);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    planner.path.forEach((p, i) => {
+      if (i) ctx.lineTo(p.x * w, p.y * h);
+      else ctx.moveTo(p.x * w, p.y * h);
+    });
+    ctx.stroke();
+  }
+  // Endpoint labels stay visible over the roadmap and path.
+  for (const [id, label, color] of [
+    [map.start, "S", "#087443"],
+    [map.goal, "G", "#b4235c"],
+  ]) {
+    const x = ((id % map.cols) + 0.5) * w,
+      y = (Math.floor(id / map.cols) + 0.5) * h;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, w * 0.43, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${w * 0.6}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x, y + h * 0.02);
+  }
+  if (document.activeElement === canvas) {
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = Math.max(2, w * 0.1);
+    ctx.strokeRect((cursor % map.cols) * w + 2, Math.floor(cursor / map.cols) * h + 2, w - 4, h - 4);
+  }
+}
+function renderSampling() {
+  searches.forEach((s, k) => {
+    const name = names[k];
+    drawSampling($(name), s);
+    const metrics = $(`${name}-metrics`),
+      values = {
+        attempts: s.iterations,
+        nodes: s.nodes.length,
+        length: Number.isFinite(s.bestCost) ? s.bestCost.toFixed(2) : s.done ? "Chưa có" : "—",
+        extra: name === "rrtstar" ? s.rewires : name === "prm" ? s.edges.length : s.nodes.length - 1,
+      };
+    for (const [key, v] of Object.entries(values)) metrics.querySelector(`[data-metric="${key}"]`).textContent = v;
+    const message =
+      name === "prm" && s.done
+        ? s.path.length
+          ? "Đã truy vấn bằng Dijkstra và tìm được đường trên mạng."
+          : "Đã truy vấn; S và G chưa được nối trong mạng này."
+        : s.message;
+    $(`${name}-current`).textContent = `${s.iterations}/${s.budget} lần thử · ${message}${
+      s.done && !s.path.length ? " Hết ngân sách, chưa tìm được đường." : ""
+    }`;
+  });
+  const done = searches.every((s) => s.done);
+  $("step").disabled = done;
+  $("finish").disabled = done;
+  if (done) {
+    stop();
+    const labels = ["RRT", "RRT*", "PRM"];
+    $("result").textContent =
+      searches.map((s, k) => `${labels[k]}: ${s.path.length ? s.bestCost.toFixed(2) + " ô" : "chưa tìm được đường"}`).join(" · ") +
+      ". Cùng ngân sách hữu hạn; chưa tìm được đường không chứng minh rằng không có đường.";
+    say("Đã chạy hết ngân sách. Có thể tăng số lần thử hoặc đổi seed rồi chạy lại.");
+  } else {
+    const found = searches.slice(0, 2).filter((s) => s.path.length).length;
+    $("result").textContent = searches.every((s) => s.iterations === 0)
+      ? "Nhấn Tiến một bước để quan sát từng mẫu, hoặc Chạy so sánh để xem cây và mạng phát triển."
+      : found
+        ? `Đã có đường ở ${found} cây. RRT* vẫn tiếp tục thử nối lại để giảm độ dài; PRM đang dựng mạng và sẽ truy vấn ở cuối.`
+        : "Đang xây cây và mạng. Mẫu hoặc đoạn nối không hợp lệ bị loại nhưng vẫn tính là một lần thử.";
+  }
+}
+function chooseMode(sample) {
+  samplingMode = sample;
+  names = sample ? sampleNames : gridNames;
+  document.querySelectorAll(".grid-only").forEach((e) => {
+    e.hidden = sample;
+  });
+  for (const id of ["sampling-settings", "sampling-boards", "sampling-legend", "sampling-reading"]) $(id).hidden = !sample;
+  $("mode-grid").setAttribute("aria-pressed", String(!sample));
+  $("mode-sampling").setAttribute("aria-pressed", String(sample));
+  $("speed-unit").textContent = sample ? "lần thử/s" : "bước/s";
+  $("reading-link").setAttribute("href", sample ? "#sampling-reading" : "#reading");
+  const url = new URL(window.location.href);
+  if (sample) url.searchParams.set("mode", "sampling");
+  else url.searchParams.delete("mode");
+  history.replaceState(null, "", url);
+  reset(sample ? "Chế độ lấy mẫu: RRT, RRT* và PRM cùng dùng bản đồ hiện tại." : "Chế độ lưới: A* và Dijkstra cùng dùng bản đồ hiện tại.");
+}
+$("mode-grid").addEventListener("click", () => chooseMode(false));
+$("mode-sampling").addEventListener("click", () => chooseMode(true));
+for (const id of ["sample-seed", "sample-budget", "sample-step", "sample-radius"])
+  $(id).addEventListener("change", () => reset("Đã đổi tham số lấy mẫu. Bản đồ được giữ nguyên."));
+$("sample-seed").addEventListener("input", () => {
+  if ($("sample-seed").value !== "" && $("sample-seed").validity.valid) reset("Đã đổi seed và bắt đầu lại phép so sánh.");
 });
 new ResizeObserver(() => {
   if (searches) render();
@@ -339,4 +495,5 @@ document.addEventListener("visibilitychange", () => {
     say("Đã tạm dừng khi chuyển sang trang khác.");
   }
 });
-reset();
+if (new URLSearchParams(window.location.search).get("mode") === "sampling") chooseMode(true);
+else reset();
