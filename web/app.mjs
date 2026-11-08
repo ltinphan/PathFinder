@@ -2,13 +2,16 @@
  * New browser UI by Luong Tin Phan, adapted from Kevin Wang's PathFinder demo.
  * Java source is unchanged; see README.md for mathematical and collision-rule changes.
  */
-import { Search, preset } from "./search.mjs";
+import { Search, preset } from "./search.mjs?v=traversal-20261108";
 import { SamplingPlanner } from "./sampling.mjs?v=rrt-stop-20261106";
 const $ = (id) => document.getElementById(id);
 const gridNames = ["astar", "dijkstra"],
+  traversalNames = ["bfs", "dfs"],
   sampleNames = ["rrt", "rrtstar", "prm"];
 let names = gridNames,
-  samplingMode = false;
+  samplingMode = false,
+  traversalMode = false;
+const labels = { astar: "A*", dijkstra: "Dijkstra", bfs: "BFS", dfs: "DFS" };
 const colors = { wall: "#344054", closed: "#c8e4f3", open: "#ffe5a3", current: "#ffb26b", path: "#166fe5" };
 let map = preset(),
   searches,
@@ -42,7 +45,9 @@ function reset(message = "Sẵn sàng. Các thuật toán dùng cùng một bả
   searches = names.map((name) => (samplingMode ? new SamplingPlanner(map, name, options) : new Search(map, name)));
   $("result").textContent = samplingMode
     ? "Hãy quan sát cây RRT, những lần nối lại của RRT* và mạng PRM. PRM sẽ truy vấn đường khi hết ngân sách mẫu."
-    : "Thử đoán trước: A* có cần xét hết vùng quanh điểm đầu không?";
+    : traversalMode
+      ? "Cùng đưa các ô kề vào theo một thứ tự. BFS lấy ô vào trước; DFS lấy ô vào sau. Bạn đoán bên nào sẽ tới đích trước?"
+      : "Thử đoán trước: A* có cần xét hết vùng quanh điểm đầu không?";
   say(message);
   render();
 }
@@ -146,20 +151,26 @@ function render() {
       s.current < 0
         ? s.done
           ? "Hết ô có thể đi tới; không tìm được đường."
-          : "Chưa lấy ô nào ra khỏi hàng đợi."
-        : `Vừa chọn ${point(s.current)} · g = ${s.g[s.current]} · h = ${s.h(s.current)} · f = ${s.g[s.current] + s.h(s.current)}${
-            s.status === "found" ? " · Đã đến đích." : ""
-          }`;
+          : `Chưa lấy ô nào ra khỏi ${name === "dfs" ? "ngăn xếp" : "hàng đợi"}.`
+        : traversalMode
+          ? `Vừa lấy ${point(s.current)} từ ${name === "dfs" ? "đỉnh ngăn xếp" : "đầu hàng đợi"} · Độ sâu ${s.depth[s.current]}${
+              s.status === "found" ? " · Đã đến đích, dừng tìm kiếm." : ""
+            }`
+          : `Vừa chọn ${point(s.current)} · g = ${s.g[s.current]} · h = ${s.h(s.current)} · f = ${s.g[s.current] + s.h(s.current)}${
+              s.status === "found" ? " · Đã đến đích." : ""
+            }`;
     const list = $(`${name}-queue`);
     list.replaceChildren();
     for (const id of s.frontier()) {
       const li = document.createElement("li");
-      li.textContent = `${point(id)}: g = ${s.g[id]}, h = ${s.h(id)}, f = ${s.g[id] + s.h(id)}`;
+      li.textContent = traversalMode
+        ? `${point(id)} · độ sâu ${s.depth[id]} · nút trước ${s.parent[id] < 0 ? "—" : point(s.parent[id])}`
+        : `${point(id)}: g = ${s.g[id]}, h = ${s.h(id)}, f = ${s.g[id] + s.h(id)}`;
       list.append(li);
     }
     if (!s.open.size) {
       const li = document.createElement("li");
-      li.textContent = "Hàng đợi trống.";
+      li.textContent = name === "dfs" ? "Ngăn xếp trống." : "Hàng đợi trống.";
       list.append(li);
     }
   });
@@ -168,22 +179,35 @@ function render() {
       ? " là vật cản."
       : ": " +
         searches
-          .map((s, k) => `${k ? "Dijkstra" : "A*"}: g = ${value(s.g[cursor])}, h = ${s.h(cursor)}, f = ${value(s.g[cursor] + s.h(cursor))}`)
+          .map((s, k) =>
+            traversalMode
+              ? `${labels[names[k]]}: ${
+                  s.depth[cursor] < 0
+                    ? "chưa phát hiện"
+                    : `độ sâu ${s.depth[cursor]}, nút trước ${s.parent[cursor] < 0 ? "—" : point(s.parent[cursor])}`
+                }`
+              : `${labels[names[k]]}: g = ${value(s.g[cursor])}, h = ${s.h(cursor)}, f = ${value(s.g[cursor] + s.h(cursor))}`
+          )
           .join(" · ")
   } Tọa độ (cột, hàng) bắt đầu từ 1 ở góc trên trái.`;
   if (searches.every((s) => s.done)) {
     stop();
     const [a, d] = searches;
     if (a.status === "found" && d.status === "found") {
-      $("result").textContent = `Cả hai tìm được đường có chi phí ${a.g[map.goal]}. A* xét ${a.expanded} ô; Dijkstra xét ${d.expanded} ô. ${
-        a.expanded < d.expanded
-          ? "Ở bản đồ này, heuristic giúp A* xét ít ô hơn."
-          : "Ở bản đồ này, A* không xét ít ô hơn; lợi ích của heuristic còn phụ thuộc bản đồ."
-      } Hai đường không nhất thiết trùng nhau.`;
+      $("result").textContent = traversalMode
+        ? `BFS tìm đường ${a.path.length - 1} cạnh sau khi xét ${a.expanded} ô; DFS tìm đường ${d.path.length - 1} cạnh sau khi xét ${
+            d.expanded
+          } ô. BFS bảo đảm ít cạnh nhất. DFS không có bảo đảm đó; đường tìm được còn phụ thuộc thứ tự đưa các ô kề vào ngăn xếp.`
+        : `Cả hai tìm được đường có chi phí ${a.g[map.goal]}. A* xét ${a.expanded} ô; Dijkstra xét ${d.expanded} ô. ${
+            a.expanded < d.expanded
+              ? "Ở bản đồ này, heuristic giúp A* xét ít ô hơn."
+              : "Ở bản đồ này, A* không xét ít ô hơn; lợi ích của heuristic còn phụ thuộc bản đồ."
+          } Hai đường không nhất thiết trùng nhau.`;
       say("Đã hoàn tất phép so sánh.");
     } else {
-      $("result").textContent =
-        `Không có đường từ S đến G. A* đã xét ${a.expanded} ô, Dijkstra đã xét ${d.expanded} ô; mỗi thuật toán dừng khi không còn ô chờ xử lý trong vùng đi tới được.`;
+      $("result").textContent = `Không có đường từ S đến G. ${labels[names[0]]} đã xét ${a.expanded} ô, ${labels[names[1]]} đã xét ${
+        d.expanded
+      } ô; mỗi thuật toán dừng khi không còn ô chờ xử lý trong vùng đi tới được.`;
       say("Đã hoàn tất: không có đường.");
     }
   }
@@ -246,7 +270,7 @@ $("scenario").addEventListener("change", newMap);
 $("new-map").addEventListener("click", newMap);
 $("movement").addEventListener("change", () => {
   map.diagonal = $("movement").value === "8";
-  reset("Đã đổi cách di chuyển và tính lại heuristic.");
+  reset("Đã đổi cách di chuyển và bắt đầu lại trên cùng bản đồ.");
 });
 $("clear-walls").addEventListener("click", () => {
   map.walls.fill(0);
@@ -304,7 +328,7 @@ function stroke(from, to) {
     }
   }
 }
-[...gridNames, ...sampleNames].forEach((name) => {
+[...gridNames, ...traversalNames, ...sampleNames].forEach((name) => {
   const canvas = $(name);
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -472,25 +496,38 @@ function renderSampling() {
             : "Đang xây cây và mạng. Mẫu hoặc đoạn nối không hợp lệ bị loại nhưng vẫn tính là một lần thử.";
   }
 }
-function chooseMode(sample) {
-  samplingMode = sample;
-  names = sample ? sampleNames : gridNames;
+function chooseMode(mode) {
+  samplingMode = mode === "sampling";
+  traversalMode = mode === "traversal";
+  names = samplingMode ? sampleNames : traversalMode ? traversalNames : gridNames;
   document.querySelectorAll(".grid-only").forEach((e) => {
-    e.hidden = sample;
+    e.hidden = samplingMode;
   });
-  for (const id of ["sampling-settings", "sampling-boards", "sampling-legend", "sampling-reading"]) $(id).hidden = !sample;
-  $("mode-grid").setAttribute("aria-pressed", String(!sample));
-  $("mode-sampling").setAttribute("aria-pressed", String(sample));
-  $("speed-unit").textContent = sample ? "lần thử/s" : "bước/s";
-  $("reading-link").setAttribute("href", sample ? "#sampling-reading" : "#reading");
+  document.querySelectorAll(".weighted-only").forEach((e) => {
+    e.hidden = mode !== "grid";
+  });
+  document.querySelectorAll(".traversal-only").forEach((e) => {
+    e.hidden = !traversalMode;
+  });
+  for (const id of ["sampling-settings", "sampling-boards", "sampling-legend", "sampling-reading"]) $(id).hidden = !samplingMode;
+  for (const name of ["grid", "traversal", "sampling"]) $("mode-" + name).setAttribute("aria-pressed", String(mode === name));
+  $("speed-unit").textContent = samplingMode ? "lần thử/s" : "bước/s";
+  $("reading-link").setAttribute("href", samplingMode ? "#sampling-reading" : traversalMode ? "#traversal-reading" : "#reading");
+  $("queue-summary").textContent = traversalMode ? "Xem hàng đợi BFS và ngăn xếp DFS" : "Xem hàng đợi và chi phí từng ô";
+  $("frontier-details").open = traversalMode;
   const url = new URL(window.location.href);
-  if (sample) url.searchParams.set("mode", "sampling");
+  if (mode !== "grid") url.searchParams.set("mode", mode);
   else url.searchParams.delete("mode");
   history.replaceState(null, "", url);
-  reset(sample ? "Chế độ lấy mẫu: RRT, RRT* và PRM cùng dùng bản đồ hiện tại." : "Chế độ lưới: A* và Dijkstra cùng dùng bản đồ hiện tại.");
+  reset(
+    samplingMode
+      ? "Chế độ lấy mẫu: RRT, RRT* và PRM cùng dùng bản đồ hiện tại."
+      : traversalMode
+        ? "BFS và DFS cùng dùng bản đồ, điểm đầu và điểm đích hiện tại."
+        : "Chế độ lưới: A* và Dijkstra cùng dùng bản đồ hiện tại."
+  );
 }
-$("mode-grid").addEventListener("click", () => chooseMode(false));
-$("mode-sampling").addEventListener("click", () => chooseMode(true));
+for (const mode of ["grid", "traversal", "sampling"]) $("mode-" + mode).addEventListener("click", () => chooseMode(mode));
 for (const id of ["sample-seed", "sample-budget", "sample-step", "sample-radius"])
   $(id).addEventListener("change", () => reset("Đã đổi tham số lấy mẫu. Bản đồ được giữ nguyên."));
 $("sample-seed").addEventListener("input", () => {
@@ -505,5 +542,5 @@ document.addEventListener("visibilitychange", () => {
     say("Đã tạm dừng khi chuyển sang trang khác.");
   }
 });
-if (new URLSearchParams(window.location.search).get("mode") === "sampling") chooseMode(true);
-else reset();
+const initialMode = new URLSearchParams(window.location.search).get("mode");
+chooseMode(["sampling", "traversal"].includes(initialMode) ? initialMode : "grid");

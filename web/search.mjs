@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Browser adaptation of Kevin Wang's PathFinder (AStarPathAlgorithm and cost evaluators).
- * Added by Luong Tin Phan: incremental steps, deterministic queue, admissible octile
- * heuristic, and stricter diagonal collision checks. Original Java files are unchanged.
+ * Added by Luong Tin Phan: BFS/DFS, incremental steps, deterministic queue,
+ * admissible octile heuristic, and stricter diagonal collision checks.
+ * Original Java files are unchanged.
  */
 class MinHeap {
   items = [];
@@ -74,7 +75,7 @@ export function neighbors(id, map) {
 
 export class Search {
   constructor(map, algorithm = "astar") {
-    if (!["astar", "dijkstra"].includes(algorithm)) throw new Error("Unknown algorithm");
+    if (!["astar", "dijkstra", "bfs", "dfs"].includes(algorithm)) throw new Error("Unknown algorithm");
     const n = map.rows * map.cols;
     if (
       !Number.isInteger(n) ||
@@ -92,24 +93,30 @@ export class Search {
       throw new Error("Invalid map");
     this.map = { ...map, walls: Uint8Array.from(map.walls) };
     this.algorithm = algorithm;
+    this.traversal = algorithm === "bfs" || algorithm === "dfs";
     this.g = new Float64Array(n).fill(Infinity);
+    this.depth = new Int32Array(n).fill(-1);
     this.parent = new Int32Array(n).fill(-1);
     this.closed = new Uint8Array(n);
     this.open = new Set([map.start]);
     this.queue = new MinHeap();
+    this.pending = [];
+    this.head = 0;
     this.order = 0;
     this.expanded = 0;
     this.current = -1;
     this.path = [];
     this.status = "ready";
     this.g[map.start] = 0;
+    this.depth[map.start] = 0;
     this.enqueue(map.start);
   }
   h(id) {
-    return this.algorithm === "dijkstra" ? 0 : heuristic(id, this.map.goal, this.map.cols, this.map.diagonal);
+    return this.algorithm === "astar" ? heuristic(id, this.map.goal, this.map.cols, this.map.diagonal) : 0;
   }
   enqueue(id) {
-    this.queue.push({ id, g: this.g[id], f: this.g[id] + this.h(id), order: this.order++ });
+    if (this.traversal) this.pending.push(id);
+    else this.queue.push({ id, g: this.g[id], f: this.g[id] + this.h(id), order: this.order++ });
   }
   get done() {
     return this.status === "found" || this.status === "no-path";
@@ -117,11 +124,16 @@ export class Search {
   step() {
     if (this.done) return false;
     let entry;
-    while (this.queue.items.length) {
-      const candidate = this.queue.pop();
-      if (!this.closed[candidate.id] && candidate.g === this.g[candidate.id]) {
-        entry = candidate;
-        break;
+    if (this.traversal) {
+      const available = this.algorithm === "bfs" ? this.head < this.pending.length : this.pending.length > 0;
+      if (available) entry = { id: this.algorithm === "bfs" ? this.pending[this.head++] : this.pending.pop() };
+    } else {
+      while (this.queue.items.length) {
+        const candidate = this.queue.pop();
+        if (!this.closed[candidate.id] && candidate.g === this.g[candidate.id]) {
+          entry = candidate;
+          break;
+        }
       }
     }
     if (!entry) {
@@ -144,8 +156,11 @@ export class Search {
     for (const [to, weight] of neighbors(id, this.map)) {
       if (this.closed[to]) continue;
       const cost = this.g[id] + weight;
-      if (cost < this.g[to]) {
+      // BFS/DFS mark on insertion: never add or reparent a discovered node.
+      // Their order ignores the 10/14 weights; g only reports the returned path cost.
+      if (this.traversal ? this.depth[to] < 0 : cost < this.g[to]) {
         this.g[to] = cost;
+        this.depth[to] = this.depth[id] + 1;
         this.parent[to] = id;
         this.open.add(to);
         this.enqueue(to);
@@ -162,6 +177,9 @@ export class Search {
     return this;
   }
   frontier(limit = 5) {
+    if (this.algorithm === "bfs") return this.pending.slice(this.head, this.head + limit);
+    // Next-to-pop order: show the top of the stack first, rather than sort by cost.
+    if (this.algorithm === "dfs") return this.pending.slice(-limit).reverse();
     return [...this.open].sort((a, b) => this.g[a] + this.h(a) - this.g[b] - this.h(b) || a - b).slice(0, limit);
   }
 }

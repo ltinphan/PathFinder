@@ -8,7 +8,7 @@ Live simulator: <https://tinrobotics.com/teaching/lap-lo-trinh-di-chuyen/mo-phon
 
 From this repository: `python3 -m http.server 8768 --directory web`, then open <http://localhost:8768/>. ES modules require HTTP rather than opening `index.html` as a local file. No package installation, backend, or external runtime library is needed. The standalone app does not send telemetry; the host website may add its own existing analytics.
 
-Verify all five planners: `node --test web/tests/*.test.mjs` (Node 18+).
+Verify all seven planners: `node --test web/tests/*.test.mjs` (Node 18+).
 
 ## What carries over
 
@@ -30,6 +30,15 @@ Added by Luong Tin Phan, November 2026, based on upstream commit `d067f683a942d3
 - Explicit model limits: a grid point is not an Ackermann vehicle, and animation speed is not a runtime benchmark.
 
 `search.mjs` contains the grid engine; `sampling.mjs` adds RRT, RRT\* and PRM; `app.mjs` handles canvas rendering and controls. `index.html` and `style.css` are standalone. The website carries a pinned copy of these six runtime/license files, with the matching fork commit recorded in its adjacent `SOURCE.md`. Tests and documentation stay in this repository. There is no practice ZIP/download button.
+
+## BFS and DFS extension
+
+These two grid algorithms are new additions to the web edition. Select **BFS · DFS**, or open <https://tinrobotics.com/teaching/lap-lo-trinh-di-chuyen/mo-phong-thuat-toan/?mode=traversal>.
+
+- Both use the same map, endpoints and neighbor insertion order (north, east, south, west, then NE, SE, SW, NW for eight directions), mark each node when inserted, and stop when the goal is removed from the frontier.
+- BFS uses a FIFO queue; DFS uses a LIFO stack without reversing the insertion order. The inspector shows up to five next-to-remove nodes in actual queue/stack order, their depth and their predecessor.
+- BFS minimizes **edge count**, including in eight-direction mode. The displayed 10/14 cost is the accumulated cost of the returned path; BFS does not minimize that weighted cost in general. DFS makes neither shortest-path claim. A\* and Dijkstra retain their existing weighted semantics.
+- Exhaustive 3×3 obstacle patterns are checked against an independent all-pairs unit-edge solver. Tests also cover legal parent chains, unreachable goals, identical endpoints, FIFO/LIFO order, cycle prevention, and stable completion.
 
 ## RRT, RRT\* and PRM extension
 

@@ -4,11 +4,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Mô phỏng A*, Dijkstra, RRT, RRT* và PRM: chỉnh bản đồ, chạy từng bước và đối chiếu kết quả tìm đường." />
+    <meta
+      name="description"
+      content="Mô phỏng BFS, DFS, A*, Dijkstra, RRT, RRT* và PRM: chỉnh bản đồ, chạy từng bước và đối chiếu kết quả tìm đường."
+    />
     <meta name="color-scheme" content="light dark" />
     <title>Mô phỏng thuật toán · Lập lộ trình di chuyển | tinrobotics</title>
-    <link rel="stylesheet" href="./style.css?v=0cc544d" />
-    <script type="module" src="./app.mjs?v=rrt-stop-20261106"></script>
+    <link rel="stylesheet" href="./style.css?v=traversal-20261108" />
+    <script type="module" src="./app.mjs?v=traversal-20261108"></script>
   </head>
   <body>
     <a class="skip" href="#simulation">Đến bảng mô phỏng</a>
@@ -26,18 +29,19 @@
           <p class="eyebrow">LẬP LỘ TRÌNH DI CHUYỂN · ĐẠI HỌC</p>
           <h1>Mô phỏng thuật toán<br />lập lộ trình di chuyển.</h1>
           <p class="lead">
-            Từ A* và Dijkstra trên lưới đến RRT, RRT* và PRM trong không gian liên tục. Hãy tự đặt vật cản, chạy từng bước và xem mỗi thuật toán tạo
-            đường đi ra sao.
+            BFS, DFS, A* và Dijkstra tìm đường trên cùng một lưới; RRT, RRT* và PRM xây cây hoặc mạng trong không gian liên tục. Hãy tự đặt vật cản,
+            chạy từng bước và quan sát cách mỗi thuật toán đi tới đích.
           </p>
         </div>
         <div class="intro-note">
-          <span class="note-number">5 THUẬT TOÁN · 2 CÁCH TIẾP CẬN</span>
+          <span class="note-number">7 THUẬT TOÁN · 2 CÁCH TIẾP CẬN</span>
           <p>Đường nào ngắn hơn?<br />Thuật toán xây đường ra sao?</p>
           <a id="reading-link" href="#reading">Cách đọc kết quả ↓</a>
         </div>
       </section>
       <div class="mode-tabs" role="group" aria-label="Nhóm thuật toán">
-        <button id="mode-grid" aria-pressed="true">A* · Dijkstra <span>Tìm kiếm trên lưới</span></button>
+        <button id="mode-traversal" aria-pressed="false">BFS · DFS <span>Hàng đợi và ngăn xếp</span></button>
+        <button id="mode-grid" aria-pressed="true">A* · Dijkstra <span>Tìm kiếm theo chi phí</span></button>
         <button id="mode-sampling" aria-pressed="false">RRT · RRT* · PRM <span>Lấy mẫu trong không gian liên tục</span></button>
       </div>
       <section id="simulation" aria-label="Mô phỏng các thuật toán tìm đường">
@@ -108,15 +112,15 @@
           <button class="quiet" id="clear-walls">Xóa hết vật cản</button>
         </div>
         <p class="hint" id="edit-help">
-          Nhấn hoặc kéo trên một bản đồ; bản đồ bên cạnh sẽ đổi theo. Dùng phím mũi tên để chọn ô, Enter để đặt. Mỗi lần sửa sẽ bắt đầu lại phép so
+          Nhấn hoặc kéo trên một bản đồ; các bản đồ còn lại sẽ đổi theo. Dùng phím mũi tên để chọn ô, Enter để đặt. Mỗi lần sửa sẽ bắt đầu lại phép so
           sánh.
         </p>
         <div class="controls">
           <button id="run" class="primary">▶ Chạy so sánh</button><button id="step">Tiến một bước</button><button id="finish">Xem kết quả</button
           ><button id="reset" class="quiet">Chạy lại từ đầu</button
-          ><span id="status" role="status" aria-live="polite">Sẵn sàng. Hai thuật toán dùng cùng một bản đồ.</span>
+          ><span id="status" role="status" aria-live="polite">Sẵn sàng. Các thuật toán dùng cùng một bản đồ.</span>
         </div>
-        <div class="boards grid-only" id="grid-boards">
+        <div class="boards weighted-only" id="grid-boards">
           <article class="board" id="astar-board">
             <header>
               <div>
@@ -190,6 +194,82 @@
               </div>
             </dl>
             <p class="current" id="dijkstra-current">Chưa lấy ô nào ra khỏi hàng đợi.</p>
+          </article>
+        </div>
+        <div class="boards traversal-only" id="traversal-boards" hidden>
+          <article class="board" id="bfs-board">
+            <header>
+              <div>
+                <span class="algo-tag">HÀNG ĐỢI · FIFO</span>
+                <h2>BFS</h2>
+              </div>
+              <p>Vào trước → lấy trước</p>
+            </header>
+            <canvas
+              id="bfs"
+              width="792"
+              height="504"
+              tabindex="0"
+              aria-label="Bản đồ BFS. Dùng mũi tên và Enter để chỉnh ô."
+              aria-describedby="edit-help bfs-metrics"
+              >Kết quả BFS được ghi ở bên dưới.</canvas
+            >
+            <dl class="metrics" id="bfs-metrics">
+              <div>
+                <dt>Ô đã xét</dt>
+                <dd data-metric="expanded">0</dd>
+              </div>
+              <div>
+                <dt>Đang chờ</dt>
+                <dd data-metric="open">1</dd>
+              </div>
+              <div>
+                <dt>Chi phí đường</dt>
+                <dd data-metric="cost">—</dd>
+              </div>
+              <div>
+                <dt>Số cạnh</dt>
+                <dd data-metric="edges">—</dd>
+              </div>
+            </dl>
+            <p class="current" id="bfs-current">Chưa lấy ô nào ra khỏi hàng đợi.</p>
+          </article>
+          <article class="board" id="dfs-board">
+            <header>
+              <div>
+                <span class="algo-tag">NGĂN XẾP · LIFO</span>
+                <h2>DFS</h2>
+              </div>
+              <p>Vào sau → lấy trước</p>
+            </header>
+            <canvas
+              id="dfs"
+              width="792"
+              height="504"
+              tabindex="0"
+              aria-label="Bản đồ DFS. Dùng mũi tên và Enter để chỉnh ô."
+              aria-describedby="edit-help dfs-metrics"
+              >Kết quả DFS được ghi ở bên dưới.</canvas
+            >
+            <dl class="metrics" id="dfs-metrics">
+              <div>
+                <dt>Ô đã xét</dt>
+                <dd data-metric="expanded">0</dd>
+              </div>
+              <div>
+                <dt>Đang chờ</dt>
+                <dd data-metric="open">1</dd>
+              </div>
+              <div>
+                <dt>Chi phí đường</dt>
+                <dd data-metric="cost">—</dd>
+              </div>
+              <div>
+                <dt>Số cạnh</dt>
+                <dd data-metric="edges">—</dd>
+              </div>
+            </dl>
+            <p class="current" id="dfs-current">Chưa lấy ô nào ra khỏi ngăn xếp.</p>
           </article>
         </div>
         <div class="legend grid-only" aria-label="Chú thích màu">
@@ -313,10 +393,10 @@
           ><span><i class="path"></i>Đường hiện tốt nhất</span>
         </div>
         <p class="result" id="result">Thử đoán trước: A* có cần xét hết vùng quanh điểm đầu không?</p>
-        <details class="queue grid-only">
-          <summary>Xem hàng đợi và chi phí từng ô</summary>
+        <details class="queue grid-only" id="frontier-details">
+          <summary id="queue-summary">Xem hàng đợi và chi phí từng ô</summary>
           <p id="inspector">Chọn một ô trên bản đồ bằng phím mũi tên để đọc chi phí.</p>
-          <div class="queue-columns">
+          <div class="queue-columns weighted-only">
             <div>
               <h3>A* · 5 ô có ưu tiên cao nhất</h3>
               <ol id="astar-queue"></ol>
@@ -326,13 +406,27 @@
               <ol id="dijkstra-queue"></ol>
             </div>
           </div>
-          <p>
+          <div class="queue-columns traversal-only" hidden>
+            <div>
+              <h3>BFS · đầu hàng đợi trước</h3>
+              <ol id="bfs-queue"></ol>
+            </div>
+            <div>
+              <h3>DFS · đỉnh ngăn xếp trước</h3>
+              <ol id="dfs-queue"></ol>
+            </div>
+          </div>
+          <p class="traversal-only" hidden>
+            Mỗi danh sách hiển thị tối đa 5 ô, bắt đầu bằng ô sẽ được lấy ra tiếp theo. Độ sâu là số cạnh từ S theo bảng nút trước hiện tại. Các ô
+            được đánh dấu ngay khi đưa vào hàng đợi hoặc ngăn xếp, nên mỗi ô chỉ xuất hiện một lần trong phần đang chờ.
+          </p>
+          <p class="weighted-only">
             Các ô có cùng mức ưu tiên được xử lý theo thứ tự đưa vào hàng đợi. Danh sách ở đây sắp thêm theo tọa độ để dễ đọc; đường tối ưu có thể
             không duy nhất.
           </p>
         </details>
       </section>
-      <section class="reading grid-only" id="reading">
+      <section class="reading weighted-only" id="reading">
         <div>
           <p class="eyebrow">ĐỌC KẾT QUẢ</p>
           <h2>Ít ô hơn chưa có nghĩa<br />là đường ngắn hơn.</h2>
@@ -365,7 +459,7 @@
           <p>Đường chéo chỉ được phép khi cả hai ô kề cạnh đều trống. Quy tắc này tránh đi xuyên qua góc vật cản.</p>
         </div>
       </section>
-      <section class="practice grid-only">
+      <section class="practice weighted-only">
         <h2>Ba thử nghiệm trên lớp</h2>
         <ol>
           <li>
@@ -383,6 +477,57 @@
         <p>
           Ghi lại bản đồ, cách di chuyển, chi phí và số ô đã xét. Hãy so sánh trên cùng cấu hình; tốc độ hoạt ảnh chỉ giúp theo dõi, không phải phép
           đo thời gian tính toán.
+        </p>
+      </section>
+      <section class="reading traversal-only" id="traversal-reading" hidden>
+        <div>
+          <p class="eyebrow">CÙNG BẢN ĐỒ · KHÁC CÁCH LẤY Ô</p>
+          <h2>BFS lan theo lớp.<br />DFS đi theo nhánh vừa thêm.</h2>
+          <p>
+            Bấm “Tiến một bước” để mỗi bên lấy ra một ô. BFS lấy ở đầu hàng đợi rồi thêm ô mới vào cuối; DFS lấy ở đỉnh ngăn xếp và cũng đưa ô mới lên
+            đỉnh. Ô màu cam là ô vừa được lấy ra xét.
+          </p>
+          <p>
+            Hai bên cùng xét các ô kề theo thứ tự: trên, phải, dưới, trái; nếu chọn 8 hướng thì thêm trên-phải, dưới-phải, dưới-trái, trên-trái. Vì
+            DFS lấy ô vào sau trước, nhánh được mở rộng tiếp có thể khác BFS ngay từ lượt thứ hai.
+          </p>
+          <p>
+            “Đang chờ” là các ô đã phát hiện nhưng chưa xét. “Đã xét” tính cả ô đích. Gặp G khi lấy ra thì dừng; các ô còn chờ vẫn được giữ trên hình
+            để bạn theo dõi.
+          </p>
+        </div>
+        <div class="reading-card">
+          <h3>Ít cạnh nhất có phải chi phí nhỏ nhất?</h3>
+          <p>
+            BFS bảo đảm tìm đường có ít cạnh nhất. Với 4 hướng, mỗi cạnh đều có chi phí 10 nên đó cũng là đường có chi phí nhỏ nhất. DFS tìm một đường
+            hợp lệ, nhưng không bảo đảm ít cạnh nhất hay ít chi phí nhất.
+          </p>
+          <p>
+            Với 8 hướng, cạnh ngang/dọc có chi phí 10 còn cạnh chéo là 14. BFS vẫn tối ưu số cạnh, nhưng chưa chắc tối ưu tổng chi phí. Dùng nhóm A* ·
+            Dijkstra nếu muốn so sánh việc tìm đường theo chi phí 10/14.
+          </p>
+          <p>Đường chéo chỉ hợp lệ khi cả hai ô kề cạnh đều trống. Cùng quy tắc này được dùng cho cả bốn thuật toán trên lưới.</p>
+        </div>
+      </section>
+      <section class="practice traversal-only" hidden>
+        <h2>Thử tự dự đoán rồi kiểm tra</h2>
+        <ol>
+          <li>
+            <strong>Cùng điểm đầu và đích.</strong> Chọn bản đồ trống và 4 hướng. Bấm một bước, xem hàng đợi/ngăn xếp, rồi đoán ô nào mỗi bên sẽ lấy
+            tiếp. Sau đó chạy hết: số cạnh và số ô đã xét có khác nhau không?
+          </li>
+          <li>
+            <strong>Đường phải đi vòng.</strong> Chọn “Một cửa hẹp”, giữ nguyên S và G rồi chạy lại. Vì sao DFS có thể tới đích sớm hơn về số ô đã xét
+            nhưng lại trả về đường dài hơn?
+          </li>
+          <li>
+            <strong>Không có đường.</strong> Chọn “Vách ngăn kín”. Quan sát thời điểm hàng đợi và ngăn xếp rỗng. Hai bên có cùng xét hết vùng đi tới
+            được từ S không?
+          </li>
+        </ol>
+        <p>
+          Giữ nguyên bản đồ, điểm đầu–đích và cách di chuyển khi đối chiếu. Tốc độ hoạt ảnh chỉ giúp theo dõi thao tác; số ô đã xét không phải thời
+          gian chạy đo bằng đồng hồ.
         </p>
       </section>
       <section class="sampling-reading" id="sampling-reading" hidden>
@@ -473,8 +618,8 @@
           · <a href="./LICENSE.txt">Apache-2.0</a>
         </p>
         <p>
-          A* và Dijkstra được chuyển từ ý tưởng demo Java của PathFinder. RRT, RRT* và PRM là phần mở rộng do Luong Tin Phan bổ sung cho bản web. Mã
-          Java gốc được giữ trong fork.
+          A* và Dijkstra được chuyển từ ý tưởng demo Java của PathFinder. BFS, DFS, RRT, RRT* và PRM là các phần mở rộng do Luong Tin Phan bổ sung cho
+          bản web. Mã Java gốc được giữ trong fork.
         </p>
         <a href="/teaching/lap-lo-trinh-di-chuyen/">← Về học phần Lập lộ trình di chuyển</a>
       </footer>
